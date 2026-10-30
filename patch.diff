@@ -1,5 +1,5 @@
 diff --git a/textdistance/algorithms/sequence_based.py b/textdistance/algorithms/sequence_based.py
-index b1fd7af..76504f2 100644
+index b1fd7af..eb76fd0 100644
 --- a/textdistance/algorithms/sequence_based.py
 +++ b/textdistance/algorithms/sequence_based.py
 @@ -10,13 +10,8 @@ from .base import BaseSimilarity as _BaseSimilarity
@@ -18,7 +18,7 @@ index b1fd7af..76504f2 100644
  
  
  __all__ = [
-@@ -47,11 +42,12 @@ class LCSSeq(_BaseSimilarity):
+@@ -47,19 +42,24 @@ class LCSSeq(_BaseSimilarity):
          http://www.dis.uniroma1.it/~bonifaci/algo/LCSSEQ.py
          http://rosettacode.org/wiki/Longest_common_subsequence#Dynamic_Programming_8
          """
@@ -27,12 +27,26 @@ index b1fd7af..76504f2 100644
 -            lengths = numpy.zeros((len(seq1) + 1, len(seq2) + 1), dtype=int)
 -        else:
 -            lengths = [array('L', [0] * (len(seq2) + 1)) for _ in range(len(seq1) + 1)]
-+        # ``array`` rows, not a numpy 2-D array: this kernel reads and writes
-+        # every cell through scalar indexing, where numpy's per-element
-+        # overhead dominates the arithmetic.  Measured ~2.8x faster at n=800 (benchmark/optimized.json).
-+        lengths: Any = [
-+            array('L', [0] * (len(seq2) + 1)) for _ in range(len(seq1) + 1)
-+        ]
++        # Rows are plain lists, not a numpy 2-D array: this kernel reads and
++        # writes every cell through scalar indexing, where numpy's per-element
++        # overhead dominates the arithmetic.  Row references are hoisted out of
++        # the inner loop and ``max()`` is inlined.  Measured ~9x faster at n=800
++        # (benchmark/optimized.json); the traceback below is unchanged.
++        lengths: Any = [[0] * (len(seq2) + 1) for _ in range(len(seq1) + 1)]
  
          # row 0 and column 0 are initialized to 0 already
          for i, char1 in enumerate(seq1):
++            prev = lengths[i]
++            row = lengths[i + 1]
+             for j, char2 in enumerate(seq2):
+                 if char1 == char2:
+-                    lengths[i + 1][j + 1] = lengths[i][j] + 1
++                    row[j + 1] = prev[j] + 1
+                 else:
+-                    lengths[i + 1][j + 1] = max(lengths[i + 1][j], lengths[i][j + 1])
++                    left = row[j]
++                    up = prev[j + 1]
++                    row[j + 1] = left if left > up else up
+ 
+         # read the substring out from the matrix
+         result = ''
